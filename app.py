@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
+import sklearn
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -74,6 +75,41 @@ def load_all_models() -> dict[str, object]:
         display_name = model_file.stem.replace("_pipeline", "").replace("_", " ").title()
         models[display_name] = joblib.load(model_file)
     return models
+
+
+def _load_all_models_with_errors() -> tuple[dict[str, object], dict[str, str]]:
+    """Load models, collecting load errors instead of crashing."""
+    models: dict[str, object] = {}
+    errors: dict[str, str] = {}
+    for model_file in MODEL_DIR.glob("*_pipeline.joblib"):
+        display_name = model_file.stem.replace("_pipeline", "").replace("_", " ").title()
+        try:
+            models[display_name] = joblib.load(model_file)
+        except Exception as exc:  # noqa: BLE001 - show friendly error to user
+            errors[display_name] = f"{type(exc).__name__}: {exc}"
+    return models, errors
+
+
+def _should_retrain_models(metadata: Mapping[str, Any]) -> bool:
+    """Return True when saved artifacts are missing or likely incompatible."""
+    model_files = list(MODEL_DIR.glob("*_pipeline.joblib"))
+    if not model_files:
+        return True
+
+    saved_sklearn = metadata.get("sklearn_version")
+    if isinstance(saved_sklearn, str) and saved_sklearn and saved_sklearn != sklearn.__version__:
+        return True
+
+    # Best-effort compatibility probe: attempt load; any failure triggers retrain.
+    _, errors = _load_all_models_with_errors()
+    return bool(errors)
+
+
+def _train_models_in_process() -> None:
+    """Train models by calling the training script's entrypoint."""
+    import train_models  # local module, safe import
+
+    train_models.main()
 
 
 def compute_metrics(
@@ -175,13 +211,43 @@ def main() -> None:
         st.code("python train_models.py")
         return
 
+    # Auto-heal common deployment issues: stale artifacts trained with a different scikit-learn.
+    if st.session_state.get("_auto_retrained_once") is None and _should_retrain_models(metadata):
+        st.session_state["_auto_retrained_once"] = True
+        with st.spinner("Preparing compatible model artifacts for this environment..."):
+            _train_models_in_process()
+        st.cache_resource.clear()
+        st.rerun()
+
     with st.spinner("Loading model pipelines..."):
-        models = load_all_models()
+        models, model_load_errors = _load_all_models_with_errors()
 
     if not models:
-        st.error("No trained models found in `model/`.")
-        st.code("python train_models.py")
+        st.error("No compatible trained models could be loaded from `model/`.")
+        if model_load_errors:
+            with st.expander("Model load errors"):
+                st.json(model_load_errors)
+        st.markdown("Train models to generate fresh artifacts for this environment.")
+        if st.button("Train models now (may take a few minutes)"):
+            with st.spinner("Training models..."):
+                _train_models_in_process()
+            st.cache_resource.clear()
+            st.rerun()
         return
+
+    if model_load_errors:
+        st.warning("Some saved model artifacts could not be loaded in this environment.")
+        with st.expander("Model load errors"):
+            st.json(model_load_errors)
+        st.markdown(
+            "This usually happens when `scikit-learn` versions differ between training and deployment. "
+            "You can retrain to regenerate compatible artifacts."
+        )
+        if st.button("Retrain models to fix compatibility"):
+            with st.spinner("Training models..."):
+                _train_models_in_process()
+            st.cache_resource.clear()
+            st.rerun()
 
     st.sidebar.markdown("### Controls")
     model_names = sorted(models.keys())
