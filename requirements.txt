@@ -4,5 +4,6 @@ scikit-learn
 xgboost
 joblib
 streamlit
+altair<5
 matplotlib
 seaborn
