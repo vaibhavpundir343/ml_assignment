@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import streamlit as st
-import sklearn
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -35,6 +34,28 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 MODEL_DIR = BASE_DIR / "model"
 APP_TITLE = "Adult Income Classifier"
+
+
+def _clear_cache() -> None:
+    """Clear Streamlit caches across versions (best effort)."""
+    clear_fn = getattr(getattr(st, "cache_resource", None), "clear", None)
+    if callable(clear_fn):
+        clear_fn()
+
+
+def _rerun() -> None:
+    """Rerun the app across Streamlit versions (best effort)."""
+    rerun_fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
+    if callable(rerun_fn):
+        rerun_fn()
+
+
+def _dataframe(df: pd.DataFrame) -> None:
+    """Render a dataframe across Streamlit versions."""
+    try:
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    except TypeError:
+        st.dataframe(df)
 
 
 def apply_global_styles() -> None:
@@ -88,28 +109,6 @@ def _load_all_models_with_errors() -> tuple[dict[str, object], dict[str, str]]:
         except Exception as exc:  # noqa: BLE001 - show friendly error to user
             errors[display_name] = f"{type(exc).__name__}: {exc}"
     return models, errors
-
-
-def _should_retrain_models(metadata: Mapping[str, Any]) -> bool:
-    """Return True when saved artifacts are missing or likely incompatible."""
-    model_files = list(MODEL_DIR.glob("*_pipeline.joblib"))
-    if not model_files:
-        return True
-
-    saved_sklearn = metadata.get("sklearn_version")
-    if isinstance(saved_sklearn, str) and saved_sklearn and saved_sklearn != sklearn.__version__:
-        return True
-
-    # Best-effort compatibility probe: attempt load; any failure triggers retrain.
-    _, errors = _load_all_models_with_errors()
-    return bool(errors)
-
-
-def _train_models_in_process() -> None:
-    """Train models by calling the training script's entrypoint."""
-    import train_models  # local module, safe import
-
-    train_models.main()
 
 
 def compute_metrics(
@@ -211,14 +210,6 @@ def main() -> None:
         st.code("python train_models.py")
         return
 
-    # Auto-heal common deployment issues: stale artifacts trained with a different scikit-learn.
-    if st.session_state.get("_auto_retrained_once") is None and _should_retrain_models(metadata):
-        st.session_state["_auto_retrained_once"] = True
-        with st.spinner("Preparing compatible model artifacts for this environment..."):
-            _train_models_in_process()
-        st.cache_resource.clear()
-        st.rerun()
-
     with st.spinner("Loading model pipelines..."):
         models, model_load_errors = _load_all_models_with_errors()
 
@@ -227,12 +218,8 @@ def main() -> None:
         if model_load_errors:
             with st.expander("Model load errors"):
                 st.json(model_load_errors)
-        st.markdown("Train models to generate fresh artifacts for this environment.")
-        if st.button("Train models now (may take a few minutes)"):
-            with st.spinner("Training models..."):
-                _train_models_in_process()
-            st.cache_resource.clear()
-            st.rerun()
+        st.markdown("Run training locally to generate artifacts, then redeploy.")
+        st.code("python3 train_models.py")
         return
 
     if model_load_errors:
@@ -241,13 +228,8 @@ def main() -> None:
             st.json(model_load_errors)
         st.markdown(
             "This usually happens when `scikit-learn` versions differ between training and deployment. "
-            "You can retrain to regenerate compatible artifacts."
+            "Re-train with the same dependency versions as this environment, commit the new `model/` artifacts, then redeploy."
         )
-        if st.button("Retrain models to fix compatibility"):
-            with st.spinner("Training models..."):
-                _train_models_in_process()
-            st.cache_resource.clear()
-            st.rerun()
 
     st.sidebar.markdown("### Controls")
     model_names = sorted(models.keys())
@@ -282,7 +264,7 @@ def main() -> None:
         comparison_path = MODEL_DIR / "model_comparison.csv"
         if comparison_path.exists():
             score_df = pd.read_csv(comparison_path)
-            st.dataframe(score_df, width="stretch", hide_index=True)
+            _dataframe(score_df)
             st.download_button(
                 "Download leaderboard CSV",
                 data=score_df.to_csv(index=False).encode("utf-8"),
@@ -328,7 +310,7 @@ def main() -> None:
                 )
 
                 st.markdown("#### Preview")
-                st.dataframe(result_df.head(25), width="stretch", hide_index=True)
+                _dataframe(result_df.head(25))
                 st.download_button(
                     "Download predictions CSV",
                     data=result_df.to_csv(index=False).encode("utf-8"),
@@ -353,7 +335,7 @@ def main() -> None:
                     if show_advanced:
                         st.markdown("#### Classification report (advanced)")
                         report = classification_report(y_true, predicted_labels, output_dict=True)
-                        st.dataframe(pd.DataFrame(report).transpose(), width="stretch")
+                        _dataframe(pd.DataFrame(report).transpose())
                 else:
                     st.info(f"Column `{target_column}` not found, so only predictions are shown.")
 
