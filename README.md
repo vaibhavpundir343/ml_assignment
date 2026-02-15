@@ -111,6 +111,12 @@ python3 train_models.py
 streamlit run app.py
 ```
 
+### Notes on Python / dependency versions
+
+- This repository includes pre-trained model artifacts in `model/*.joblib`.
+- Those artifacts were produced with **scikit-learn 1.6.1**, so `requirements.txt` pins **`scikit-learn==1.6.1`** to ensure the Streamlit app can unpickle them reliably.
+- For Streamlit Community Cloud, this repo also includes a `runtime.txt` requesting **Python 3.12** (needed because scikit-learn 1.6.1 is not compatible with Python 3.13).
+
 ## Streamlit App Features
 
 - CSV file uploader for batch predictions
@@ -127,11 +133,13 @@ streamlit run app.py
 2. Ensure these files exist at repository root:
    - `app.py`
    - `requirements.txt`
+   - `runtime.txt` (pins Python version for deployment)
    - `model/` artifacts (or generate in a build step)
    - `data/` references used by app
 3. In Streamlit Community Cloud:
    - connect the GitHub repo
    - select branch and `app.py`
+   - in **Advanced settings**, select **Python 3.12** if prompted (some deployments may ignore `runtime.txt`)
    - deploy
 4. Verify startup logs show successful model loading.
 
@@ -141,3 +149,8 @@ streamlit run app.py
 - No secrets or API keys required.
 - Compatible with standard Python packages available on Streamlit Cloud.
 - No machine-specific absolute paths.
+
+### Important: no training during deployment
+
+The Streamlit app is designed to **load existing artifacts** from `model/` and does **not** retrain models at startup.
+If you want to refresh models, run `python3 train_models.py` locally, commit the updated `model/` artifacts, and redeploy.
