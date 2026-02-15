@@ -36,28 +36,6 @@ MODEL_DIR = BASE_DIR / "model"
 APP_TITLE = "Adult Income Classifier"
 
 
-def _clear_cache() -> None:
-    """Clear Streamlit caches across versions (best effort)."""
-    clear_fn = getattr(getattr(st, "cache_resource", None), "clear", None)
-    if callable(clear_fn):
-        clear_fn()
-
-
-def _rerun() -> None:
-    """Rerun the app across Streamlit versions (best effort)."""
-    rerun_fn = getattr(st, "rerun", None) or getattr(st, "experimental_rerun", None)
-    if callable(rerun_fn):
-        rerun_fn()
-
-
-def _dataframe(df: pd.DataFrame) -> None:
-    """Render a dataframe across Streamlit versions."""
-    try:
-        st.dataframe(df, use_container_width=True, hide_index=True)
-    except TypeError:
-        st.dataframe(df)
-
-
 def apply_global_styles() -> None:
     """Apply lightweight CSS for a cleaner, consistent look."""
     st.markdown(
@@ -96,19 +74,6 @@ def load_all_models() -> dict[str, object]:
         display_name = model_file.stem.replace("_pipeline", "").replace("_", " ").title()
         models[display_name] = joblib.load(model_file)
     return models
-
-
-def _load_all_models_with_errors() -> tuple[dict[str, object], dict[str, str]]:
-    """Load models, collecting load errors instead of crashing."""
-    models: dict[str, object] = {}
-    errors: dict[str, str] = {}
-    for model_file in MODEL_DIR.glob("*_pipeline.joblib"):
-        display_name = model_file.stem.replace("_pipeline", "").replace("_", " ").title()
-        try:
-            models[display_name] = joblib.load(model_file)
-        except Exception as exc:  # noqa: BLE001 - show friendly error to user
-            errors[display_name] = f"{type(exc).__name__}: {exc}"
-    return models, errors
 
 
 def compute_metrics(
@@ -211,25 +176,12 @@ def main() -> None:
         return
 
     with st.spinner("Loading model pipelines..."):
-        models, model_load_errors = _load_all_models_with_errors()
+        models = load_all_models()
 
     if not models:
-        st.error("No compatible trained models could be loaded from `model/`.")
-        if model_load_errors:
-            with st.expander("Model load errors"):
-                st.json(model_load_errors)
-        st.markdown("Run training locally to generate artifacts, then redeploy.")
-        st.code("python3 train_models.py")
+        st.error("No trained models found in `model/`.")
+        st.code("python train_models.py")
         return
-
-    if model_load_errors:
-        st.warning("Some saved model artifacts could not be loaded in this environment.")
-        with st.expander("Model load errors"):
-            st.json(model_load_errors)
-        st.markdown(
-            "This usually happens when `scikit-learn` versions differ between training and deployment. "
-            "Re-train with the same dependency versions as this environment, commit the new `model/` artifacts, then redeploy."
-        )
 
     st.sidebar.markdown("### Controls")
     model_names = sorted(models.keys())
@@ -264,7 +216,7 @@ def main() -> None:
         comparison_path = MODEL_DIR / "model_comparison.csv"
         if comparison_path.exists():
             score_df = pd.read_csv(comparison_path)
-            _dataframe(score_df)
+            st.dataframe(score_df, width="stretch", hide_index=True)
             st.download_button(
                 "Download leaderboard CSV",
                 data=score_df.to_csv(index=False).encode("utf-8"),
@@ -310,7 +262,7 @@ def main() -> None:
                 )
 
                 st.markdown("#### Preview")
-                _dataframe(result_df.head(25))
+                st.dataframe(result_df.head(25), width="stretch", hide_index=True)
                 st.download_button(
                     "Download predictions CSV",
                     data=result_df.to_csv(index=False).encode("utf-8"),
@@ -335,7 +287,7 @@ def main() -> None:
                     if show_advanced:
                         st.markdown("#### Classification report (advanced)")
                         report = classification_report(y_true, predicted_labels, output_dict=True)
-                        _dataframe(pd.DataFrame(report).transpose())
+                        st.dataframe(pd.DataFrame(report).transpose(), width="stretch")
                 else:
                     st.info(f"Column `{target_column}` not found, so only predictions are shown.")
 

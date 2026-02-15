@@ -12,15 +12,12 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import joblib
 import numpy as np
 import pandas as pd
-import sklearn
 from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -491,12 +488,6 @@ def main() -> None:
         "source": "https://www.openml.org/d/1590",
         "target_column": "income",
         "positive_label": positive_label,
-        "python_version": sys.version.split()[0],
-        "sklearn_version": sklearn.__version__,
-        "numpy_version": np.__version__,
-        "pandas_version": pd.__version__,
-        "joblib_version": joblib.__version__,
-        "trained_at_utc": datetime.now(timezone.utc).isoformat(),
         "feature_columns": x_clean.columns.tolist(),
         "trained_models": trained_model_names,
         "test_size": TEST_SIZE,
