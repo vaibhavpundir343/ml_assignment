@@ -76,18 +76,19 @@ The comparison table is exported to:
 
 | Model               | Accuracy |    AUC | Precision | Recall | F1 Score |    MCC |
 | ------------------- | -------: | -----: | --------: | -----: | -------: | -----: |
-| XGBoost             |   0.8742 | 0.9298 |    0.7887 | 0.6480 |   0.7114 | 0.6370 |
-| Random Forest       |   0.8589 | 0.9058 |    0.7398 | 0.6334 |   0.6825 | 0.5955 |
+| XGBoost             |   0.8745 | 0.9295 |    0.7905 | 0.6471 |   0.7117 | 0.6376 |
+| Random Forest       |   0.8670 | 0.9176 |    0.7768 | 0.6236 |   0.6918 | 0.6143 |
+| Decision Tree       |   0.8637 | 0.9087 |    0.7868 | 0.5902 |   0.6745 | 0.6002 |
 | Logistic Regression |   0.8524 | 0.9042 |    0.7414 | 0.5885 |   0.6562 | 0.5699 |
-| KNN                 |   0.8443 | 0.8876 |    0.7050 | 0.6009 |   0.6488 | 0.5525 |
-| Decision Tree       |   0.8141 | 0.7475 |    0.6098 | 0.6198 |   0.6148 | 0.4923 |
-| Naive Bayes         |   0.6204 | 0.8287 |    0.3794 | 0.9213 |   0.5374 | 0.3866 |
+| KNN                 |   0.8475 | 0.8955 |    0.7168 | 0.5997 |   0.6530 | 0.5599 |
+| Naive Bayes         |   0.8033 | 0.6537 |    0.7227 | 0.2887 |   0.4126 | 0.3683 |
 
 ## Observations
 
 - XGBoost is the best-performing model across F1, MCC, and AUC.
 - Random Forest is the second-best option with balanced performance.
-- Naive Bayes has very high recall but low precision, so it over-predicts the positive class.
+- Decision Tree is competitive in this run, with strong precision and moderate recall.
+- Naive Bayes underperforms here (notably low recall and AUC).
 - Decision threshold tuning materially changes precision-recall trade-offs and is exposed in the app sidebar.
 
 ## How to Run Locally
